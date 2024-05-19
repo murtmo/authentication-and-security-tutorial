@@ -4,6 +4,7 @@ import pg from "pg";
 import bcrypt from "bcrypt";
 import session from "express-session";
 import passport from "passport";
+import { Strategy } from "passport-local";
 
 const app = express();
 const port = 3000;
@@ -77,34 +78,60 @@ app.post("/register", async (req, res) => {
   }
 });
 
-app.post("/login", async (req, res) => {
-  const email = req.body.username;
-  const loginPassword = req.body.password;
+app.post("/login", passport.authenticate("local", {
+  successRedirect: "/secrets",
+  failureRedirect: "/login",
+}));
 
-  try {
-    const result = await db.query("SELECT * FROM users WHERE email = $1", [
-      email,
-    ]);
-    if (result.rows.length > 0) {
-      const user = result.rows[0];
-      const storedHashedPassword = user.password;
-      bcrypt.compare(loginPassword, storedHashedPassword, (err, result) => {
-        if (err) {
-          console.error("Error comparing passwords:", err);
-        } else {
-          if (result) {
-            res.render("secrets.ejs");
-          } else {
-            res.send("Incorrect Password");
-          }
-        }
-      });
-    } else {
-      res.send("User not found");
-    }
-  } catch (err) {
-    console.log(err);
+app.get("/secrets", (req, res) => {
+  console.log(req.user);
+  if (req.isAuthenticated()) {
+    res.render("secrets.ejs");
+  } else {
+    res.redirect("/login");
   }
+});
+
+passport.use(
+  new Strategy(async function verify(username, password, cb) {
+    try {
+      const result = await db.query("SELECT * FROM users WHERE email = $1", [
+        username,
+      ]);
+      if (result.rows.length > 0) {
+        const user = result.rows[0];
+        const storedHashedPassword = user.password;
+        bcrypt.compare(password, storedHashedPassword, (err, result) => {
+          if (err) {
+            console.error("Error comparing passwords:", err);
+            return cb(err)
+          } else {
+            if (result) {
+              // res.render("secrets.ejs");　を以下に変更できる
+              return cb(null, user)
+            } else {
+              // res.send("Incorrect Password");　を以下に変更できる
+              return cb(null, false)
+              // false ... req.isAuthenticated() が false という意
+            }
+          }
+        });
+      } else {
+        // res.send("User not found");
+        return cb("User not found");
+      }
+    } catch (err) {
+      console.log(err);
+      return cb(err)
+    }
+  })
+)
+
+passport.serializeUser((user, cb) => {
+  cb(null, user);
+});
+passport.deserializeUser((user, cb) => {
+  cb(null, user);
 });
 
 app.listen(port, () => {
