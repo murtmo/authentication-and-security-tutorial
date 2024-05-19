@@ -11,7 +11,7 @@ const db = new pg.Client({
   user: "postgres",
   host: "localhost",
   database: "secrets",
-  password: "123456",
+  password: "TamaoM1103",
   port: 5432,
 });
 db.connect();
@@ -43,8 +43,8 @@ app.post("/register", async (req, res) => {
     if (checkResult.rows.length > 0) {
       res.send("Email already exists. Try logging in.");
     } else {
-      // Password Hashing
 
+      // Password Hashing
       bcrypt.hash(password, saltRounds, async(err, hash) => {
         if (err) {
           console.error("Error hashing password:", err);
@@ -65,7 +65,7 @@ app.post("/register", async (req, res) => {
 
 app.post("/login", async (req, res) => {
   const email = req.body.username;
-  const password = req.body.password;
+  const loginPassword = req.body.password;
 
   try {
     const result = await db.query("SELECT * FROM users WHERE email = $1", [
@@ -73,13 +73,20 @@ app.post("/login", async (req, res) => {
     ]);
     if (result.rows.length > 0) {
       const user = result.rows[0];
-      const storedPassword = user.password;
+      const storedHashPassword = user.password;
 
-      if (password === storedPassword) {
-        res.render("secrets.ejs");
-      } else {
-        res.send("Incorrect Password");
-      }
+      // Verifying the password
+      bcrypt.compare(loginPassword, storedHashPassword, (err, result) => {
+        if (err) {
+          console.error("Error comparing passwords:", err);
+        } else {
+          if (result) {
+            res.render("secrets.ejs");
+          } else {
+            res.send("Incorrect Password");
+          }
+        }
+      })
     } else {
       res.send("User not found");
     }
